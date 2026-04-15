@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import DailyLog from "./components/DailyLog";
 import ExportModal from "./components/ExportModal";
+import GitHubSync from "./components/GitHubSync";
 import LogList from "./components/LogList";
+import StreakDisplay from "./components/StreakDisplay";
 import { formatMonthHeading, getCurrentMonthLogs, getTodayDate } from "./utils/date";
 import { getLogs, getLogByDate, updateLog } from "./utils/storage";
+import { calculateCurrentStreak, calculateTotalDays } from "./utils/streak";
 
 const EMPTY_LOG = { oneLine: "", notes: "" };
 
@@ -58,6 +61,8 @@ export default function App() {
     () => Object.keys(logs).sort((left, right) => right.localeCompare(left)),
     [logs]
   );
+  const currentStreak = useMemo(() => calculateCurrentStreak(logs), [logs]);
+  const totalDaysLogged = useMemo(() => calculateTotalDays(logs), [logs]);
 
   const handleFieldChange = (field, value) => {
     setDraft((current) => ({
@@ -134,15 +139,28 @@ export default function App() {
           </div>
         </header>
 
+        <StreakDisplay logs={logs} currentStreak={currentStreak} totalDaysLogged={totalDaysLogged} />
+
         <main className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
           <LogList dates={sortedDates} selectedDate={selectedDate} onSelectDate={handleSelectDate} />
-          <DailyLog
-            date={selectedDate}
-            oneLine={draft.oneLine}
-            notes={draft.notes}
-            onOneLineChange={(value) => handleFieldChange("oneLine", value)}
-            onNotesChange={(value) => handleFieldChange("notes", value)}
-          />
+          <div className="space-y-6">
+            <DailyLog
+              date={selectedDate}
+              oneLine={draft.oneLine}
+              notes={draft.notes}
+              onOneLineChange={(value) => handleFieldChange("oneLine", value)}
+              onNotesChange={(value) => handleFieldChange("notes", value)}
+            />
+            <GitHubSync
+              selectedDate={selectedDate}
+              draft={draft}
+              onPrepareSync={() => {
+                const savedLogs = updateLog(selectedDate, draft);
+                setLogs(savedLogs);
+                return savedLogs;
+              }}
+            />
+          </div>
         </main>
       </div>
 
