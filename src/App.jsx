@@ -9,7 +9,7 @@ import { formatMonthHeading, getCurrentMonthLogs, getTodayDate } from "./utils/d
 import { getLogs, getLogByDate, updateLog } from "./utils/storage";
 import { calculateCurrentStreak, calculateTotalDays } from "./utils/streak";
 
-const EMPTY_LOG = { oneLine: "", notes: "" };
+const EMPTY_LOG = { oneLine: "", journal: "" };
 
 export default function App() {
   if (window.location.pathname === "/callback") {
@@ -156,15 +156,18 @@ function MainApp() {
             <DailyLog
               date={selectedDate}
               oneLine={draft.oneLine}
-              notes={draft.notes}
+              journal={draft.journal}
               onOneLineChange={(value) => handleFieldChange("oneLine", value)}
-              onNotesChange={(value) => handleFieldChange("notes", value)}
+              onJournalChange={(value) => handleFieldChange("journal", value)}
             />
             <GitHubSync
               onPrepareSync={() => {
                 const savedLogs = updateLog(selectedDate, draft);
                 setLogs(savedLogs);
-                return savedLogs;
+                return {
+                  logs: savedLogs,
+                  syncDate: selectedDate,
+                };
               }}
             />
           </div>

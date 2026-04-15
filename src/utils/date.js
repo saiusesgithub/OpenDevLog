@@ -7,6 +7,17 @@ export function getTodayDate() {
   return `${year}-${month}-${day}`;
 }
 
+export function getYearFromDate(date) {
+  return date.slice(0, 4);
+}
+
+export function getMonthNameFromDate(date) {
+  const [year, month] = date.split("-");
+  return new Date(Number(year), Number(month) - 1, 1).toLocaleString("en-US", {
+    month: "long",
+  });
+}
+
 export function getCurrentMonthLogs(logs, currentDate = getTodayDate()) {
   const prefix = currentDate.slice(0, 7);
 

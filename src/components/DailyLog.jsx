@@ -1,4 +1,4 @@
-export default function DailyLog({ date, oneLine, notes, onOneLineChange, onNotesChange }) {
+export default function DailyLog({ date, oneLine, journal, onOneLineChange, onJournalChange }) {
   const isValid = oneLine.trim().length > 0;
 
   return (
@@ -19,23 +19,23 @@ export default function DailyLog({ date, oneLine, notes, onOneLineChange, onNote
 
       <div className="space-y-5">
         <label className="block">
-          <span className="mb-2 block text-sm font-medium text-slate-200">What did you learn today?</span>
+          <span className="mb-2 block text-sm font-medium text-slate-200">One-Line Summary</span>
           <input
             type="text"
             value={oneLine}
             onChange={(event) => onOneLineChange(event.target.value)}
-            placeholder="Learned React basics"
+            placeholder="Started OpenDevLog development"
             className="w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-sky-500"
           />
         </label>
 
         <label className="block">
-          <span className="mb-2 block text-sm font-medium text-slate-200">Notes</span>
+          <span className="mb-2 block text-sm font-medium text-slate-200">Detailed Journal</span>
           <textarea
-            value={notes}
-            onChange={(event) => onNotesChange(event.target.value)}
-            placeholder="Studied hooks, component structure, and when to lift state."
-            rows="10"
+            value={journal}
+            onChange={(event) => onJournalChange(event.target.value)}
+            placeholder="Wanted to test Codex app and compare it with Claude Code, so I started development of OpenDevLog."
+            rows="14"
             className="min-h-52 w-full resize-y rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-sky-500"
           />
         </label>

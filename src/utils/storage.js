@@ -24,7 +24,7 @@ export function getLogs() {
     }
 
     const parsedValue = JSON.parse(rawValue);
-    return parsedValue?.logs && typeof parsedValue.logs === "object" ? parsedValue.logs : {};
+    return parsedValue?.logs && typeof parsedValue.logs === "object" ? normalizeLogs(parsedValue.logs) : {};
   } catch {
     return {};
   }
@@ -35,7 +35,7 @@ export function saveLogs(logs) {
     return logs;
   }
 
-  const safeLogs = logs && typeof logs === "object" ? logs : {};
+  const safeLogs = logs && typeof logs === "object" ? normalizeLogs(logs) : {};
 
   try {
     window.localStorage.setItem(
@@ -62,11 +62,21 @@ export function updateLog(date, data) {
     ...logs,
     [date]: {
       oneLine: data?.oneLine || "",
-      notes: data?.notes || "",
+      journal: data?.journal || "",
     },
   };
 
   return saveLogs(nextLogs);
+}
+
+function normalizeLogs(logs) {
+  return Object.entries(logs || {}).reduce((result, [date, value]) => {
+    result[date] = {
+      oneLine: value?.oneLine || "",
+      journal: value?.journal || value?.notes || "",
+    };
+    return result;
+  }, {});
 }
 
 export function getGitHubConfig() {
