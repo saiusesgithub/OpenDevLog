@@ -117,32 +117,100 @@ router.post("/api/github/user/repos", async (request, response) => {
   }
 });
 
-router.put("/api/github/repos/:owner/:repo/contents/devlog.md", async (request, response) => {
+router.post("/api/github/repos/:owner/:repo/sync", async (request, response) => {
   const token = readBearerToken(request);
   const owner = request.params.owner;
   const repo = request.params.repo;
-  const content = request.body.content || "";
+  const files = Array.isArray(request.body.files) ? request.body.files : [];
+  const commitDate = request.body.commitDate || new Date().toISOString().slice(0, 10);
 
   if (!token) {
     response.status(401).json({ message: "Missing GitHub access token." });
     return;
   }
 
-  if (!content.trim()) {
+  if (files.length === 0) {
     response.status(400).json({ message: "No completed logs to sync." });
     return;
   }
 
   try {
-    const sha = await getFileSHA(token, owner, repo);
-    const today = new Date().toISOString().slice(0, 10);
+    const repoResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}`, {
+      headers: buildGitHubHeaders(token),
+    });
+    const defaultBranch = repoResponse.data.default_branch;
+    const refResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${defaultBranch}`, {
+      headers: buildGitHubHeaders(token),
+    });
+    const latestCommitSha = refResponse.data.object.sha;
+    const commitResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}/git/commits/${latestCommitSha}`, {
+      headers: buildGitHubHeaders(token),
+    });
+    const baseTreeSha = commitResponse.data.tree.sha;
+    const treeResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}/git/trees/${baseTreeSha}?recursive=1`, {
+      headers: buildGitHubHeaders(token),
+    });
+    const existingFiles = new Map(treeResponse.data.tree.map((item) => [item.path, item.sha]));
+    const treeEntries = [];
 
-    await axios.put(
-      `https://api.github.com/repos/${owner}/${repo}/contents/devlog.md`,
+    for (const file of files) {
+      if (!file.path || typeof file.content !== "string") {
+        continue;
+      }
+
+      const blobResponse = await axios.post(
+        `https://api.github.com/repos/${owner}/${repo}/git/blobs`,
+        {
+          content: file.content,
+          encoding: "utf-8",
+        },
+        {
+          headers: buildGitHubHeaders(token),
+        }
+      );
+
+      treeEntries.push({
+        path: file.path,
+        mode: "100644",
+        type: "blob",
+        sha: blobResponse.data.sha,
+        previousSha: existingFiles.get(file.path) || null,
+      });
+    }
+
+    const newTreeResponse = await axios.post(
+      `https://api.github.com/repos/${owner}/${repo}/git/trees`,
       {
-        message: `Update dev log - ${today}`,
-        content: Buffer.from(content, "utf-8").toString("base64"),
-        ...(sha ? { sha } : {}),
+        base_tree: baseTreeSha,
+        tree: treeEntries.map(({ path, mode, type, sha }) => ({
+          path,
+          mode,
+          type,
+          sha,
+        })),
+      },
+      {
+        headers: buildGitHubHeaders(token),
+      }
+    );
+
+    const newCommitResponse = await axios.post(
+      `https://api.github.com/repos/${owner}/${repo}/git/commits`,
+      {
+        message: `Update OpenDevLog entries - ${commitDate}`,
+        tree: newTreeResponse.data.sha,
+        parents: [latestCommitSha],
+      },
+      {
+        headers: buildGitHubHeaders(token),
+      }
+    );
+
+    await axios.patch(
+      `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${defaultBranch}`,
+      {
+        sha: newCommitResponse.data.sha,
+        force: false,
       },
       {
         headers: buildGitHubHeaders(token),
@@ -150,29 +218,13 @@ router.put("/api/github/repos/:owner/:repo/contents/devlog.md", async (request, 
     );
 
     response.json({
-      message: sha ? "Synced and updated devlog.md." : "Synced and created devlog.md.",
+      message: `Synced ${treeEntries.length} OpenDevLog files.`,
       syncedAt: new Date().toISOString(),
     });
   } catch (error) {
-    sendGitHubError(response, error, "Failed to sync devlog.md.");
+    sendGitHubError(response, error, "Failed to sync OpenDevLog entries.");
   }
 });
-
-async function getFileSHA(token, owner, repo) {
-  try {
-    const fileResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}/contents/devlog.md`, {
-      headers: buildGitHubHeaders(token),
-    });
-
-    return fileResponse.data.sha || null;
-  } catch (error) {
-    if (error.response?.status === 404) {
-      return null;
-    }
-
-    throw error;
-  }
-}
 
 function buildGitHubHeaders(token) {
   return {

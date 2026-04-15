@@ -125,8 +125,8 @@ export default function GitHubSync({ onPrepareSync }) {
     setIsLoading(true);
 
     try {
-      const logs = onPrepareSync();
-      const result = await pushToGitHub(token, repo, logs);
+      const { logs, syncDate } = onPrepareSync();
+      const result = await pushToGitHub(token, repo, logs, syncDate);
       const nextResult = saveLastGitHubSyncResult({
         status: "success",
         message: result.message,
@@ -162,7 +162,7 @@ export default function GitHubSync({ onPrepareSync }) {
         <p className="text-sm uppercase tracking-[0.25em] text-slate-500">GitHub Sync</p>
         <h2 className="mt-2 text-xl font-semibold text-white">GitHub OAuth sync</h2>
         <p className="mt-2 text-sm text-slate-400">
-          Connect once, pick a repository, and push one clean `devlog.md` commit when you want.
+          Connect once, pick a repository, and push structured daily, monthly, and yearly Markdown files when you want.
         </p>
       </div>
 
