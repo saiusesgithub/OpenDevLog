@@ -1,5 +1,6 @@
 const STORAGE_KEY = "open-dev-log";
-const GITHUB_KEY = "open-dev-log-github";
+const GITHUB_TOKEN_KEY = "github_token";
+const GITHUB_REPO_KEY = "repo";
 const GITHUB_SYNC_RESULT_KEY = "open-dev-log-github-sync-result";
 
 function isStorageAvailable() {
@@ -74,16 +75,9 @@ export function getGitHubConfig() {
   }
 
   try {
-    const rawValue = window.localStorage.getItem(GITHUB_KEY);
-
-    if (!rawValue) {
-      return { token: "", repo: "" };
-    }
-
-    const parsedValue = JSON.parse(rawValue);
     return {
-      token: parsedValue?.token || "",
-      repo: parsedValue?.repo || "",
+      token: window.localStorage.getItem(GITHUB_TOKEN_KEY) || "",
+      repo: window.localStorage.getItem(GITHUB_REPO_KEY) || "",
     };
   } catch {
     return { token: "", repo: "" };
@@ -101,12 +95,26 @@ export function saveGitHubConfig(config) {
   };
 
   try {
-    window.localStorage.setItem(GITHUB_KEY, JSON.stringify(safeConfig));
+    window.localStorage.setItem(GITHUB_TOKEN_KEY, safeConfig.token);
+    window.localStorage.setItem(GITHUB_REPO_KEY, safeConfig.repo);
   } catch {
     return safeConfig;
   }
 
   return safeConfig;
+}
+
+export function clearGitHubConfig() {
+  if (!isStorageAvailable()) {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(GITHUB_TOKEN_KEY);
+    window.localStorage.removeItem(GITHUB_REPO_KEY);
+  } catch {
+    return;
+  }
 }
 
 export function getLastGitHubSyncResult() {

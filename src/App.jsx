@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DailyLog from "./components/DailyLog";
 import ExportModal from "./components/ExportModal";
+import GitHubCallback from "./components/GitHubCallback";
 import GitHubSync from "./components/GitHubSync";
 import LogList from "./components/LogList";
 import StreakDisplay from "./components/StreakDisplay";
@@ -11,6 +12,14 @@ import { calculateCurrentStreak, calculateTotalDays } from "./utils/streak";
 const EMPTY_LOG = { oneLine: "", notes: "" };
 
 export default function App() {
+  if (window.location.pathname === "/callback") {
+    return <GitHubCallback />;
+  }
+
+  return <MainApp />;
+}
+
+function MainApp() {
   const today = getTodayDate();
   const [logs, setLogs] = useState(() => getLogs());
   const [selectedDate, setSelectedDate] = useState(today);
@@ -152,8 +161,6 @@ export default function App() {
               onNotesChange={(value) => handleFieldChange("notes", value)}
             />
             <GitHubSync
-              selectedDate={selectedDate}
-              draft={draft}
               onPrepareSync={() => {
                 const savedLogs = updateLog(selectedDate, draft);
                 setLogs(savedLogs);

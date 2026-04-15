@@ -1,74 +1,3 @@
-import { getTodayDate } from "./date";
-
-const FILE_PATH = "devlog.md";
-const API_VERSION = "2022-11-28";
-
-export function encodeToBase64(content) {
-  const bytes = new TextEncoder().encode(content);
-  let binary = "";
-
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-
-  return btoa(binary);
-}
-
-export async function getFileSHA(token, repo) {
-  const response = await fetch(`https://api.github.com/repos/${repo}/contents/${FILE_PATH}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": API_VERSION,
-    },
-  });
-
-  if (response.status === 404) {
-    return null;
-  }
-
-  if (!response.ok) {
-    throw new Error(await getGitHubErrorMessage(response));
-  }
-
-  const data = await response.json();
-  return data.sha || null;
-}
-
-export async function pushToGitHub(token, repo, logs) {
-  const content = buildMarkdown(logs);
-
-  if (!content) {
-    throw new Error("No completed logs to sync.");
-  }
-
-  const sha = await getFileSHA(token, repo);
-  const today = getTodayDate();
-  const response = await fetch(`https://api.github.com/repos/${repo}/contents/${FILE_PATH}`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "Content-Type": "application/json",
-      "X-GitHub-Api-Version": API_VERSION,
-    },
-    body: JSON.stringify({
-      message: `Update dev log - ${today}`,
-      content: encodeToBase64(content),
-      ...(sha ? { sha } : {}),
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(await getGitHubErrorMessage(response));
-  }
-
-  return {
-    message: sha ? "Synced and updated devlog.md." : "Synced and created devlog.md.",
-    syncedAt: new Date().toISOString(),
-  };
-}
-
 function buildMarkdown(logs) {
   const entries = Object.entries(logs || {})
     .filter(([, log]) => (log?.oneLine || "").trim().length > 0)
@@ -92,19 +21,89 @@ function buildMarkdown(logs) {
   return `# OpenDevLog\n\n${sections.join("\n\n")}\n`;
 }
 
-async function getGitHubErrorMessage(response) {
-  if (response.status === 401 || response.status === 403) {
-    return "Invalid token or missing repo permission.";
+export async function exchangeOAuthCode(code) {
+  const response = await fetch(`/auth/github/callback?code=${encodeURIComponent(code)}`);
+
+  if (!response.ok) {
+    throw await createFrontendError(response);
   }
 
-  if (response.status === 404) {
-    return "Repo not found.";
+  return response.json();
+}
+
+export async function fetchUserRepos(token) {
+  const response = await fetch("/api/github/user/repos", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw await createFrontendError(response);
   }
+
+  return response.json();
+}
+
+export async function createRepository(token, name) {
+  const response = await fetch("/api/github/user/repos", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name,
+      private: false,
+    }),
+  });
+
+  if (!response.ok) {
+    throw await createFrontendError(response);
+  }
+
+  return response.json();
+}
+
+export async function pushToGitHub(token, repo, logs) {
+  const content = buildMarkdown(logs);
+
+  if (!content) {
+    const error = new Error("No completed logs to sync.");
+    error.status = 400;
+    throw error;
+  }
+
+  const [owner, name] = repo.split("/");
+  const response = await fetch(`/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/contents/devlog.md`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      content,
+    }),
+  });
+
+  if (!response.ok) {
+    throw await createFrontendError(response);
+  }
+
+  return response.json();
+}
+
+async function createFrontendError(response) {
+  let message = "GitHub request failed.";
 
   try {
     const data = await response.json();
-    return data.message || "GitHub API request failed.";
+    message = data.message || message;
   } catch {
-    return "GitHub API request failed.";
+    message = "GitHub request failed.";
   }
+
+  const error = new Error(message);
+  error.status = response.status;
+  return error;
 }
