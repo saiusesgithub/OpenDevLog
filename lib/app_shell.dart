@@ -27,8 +27,8 @@ class _AppShellState extends State<AppShell> {
     _pages = [
       HomeScreen(onNavigate: _handleTab),
       const EntriesScreen(),
-      const SummaryScreen(),
-      const PreviewScreen(),
+      SummaryScreen(),
+      PreviewScreen(),
       const SettingsScreen(),
     ];
   }
