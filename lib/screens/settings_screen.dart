@@ -1,12 +1,128 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/app_settings.dart';
+import '../repositories/local_settings_repository.dart';
 import '../widgets/section_card.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
   @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  final _tokenController = TextEditingController();
+  final _repoController = TextEditingController();
+  final _branchController = TextEditingController(text: 'main');
+  final _providerController = TextEditingController();
+  final _apiKeyController = TextEditingController();
+  final _modelController = TextEditingController();
+  final _commitTimeController = TextEditingController(text: '23:30');
+
+  LocalSettingsRepository? _settingsRepository;
+  String? _githubUsername;
+  bool _autoCommitEnabled = false;
+  bool _darkThemeEnabled = true;
+  bool _isLoading = true;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final repository = LocalSettingsRepository(prefs);
+    final settings = await repository.getSettings();
+
+    _settingsRepository = repository;
+    _tokenController.text = settings.githubToken ?? '';
+    _repoController.text = settings.selectedRepo ?? '';
+    _branchController.text = settings.selectedBranch;
+    _providerController.text = settings.aiProvider ?? '';
+    _apiKeyController.text = settings.aiApiKey ?? '';
+    _modelController.text = settings.aiModel ?? '';
+    _commitTimeController.text = settings.autoCommitTime;
+    _githubUsername = settings.githubUsername;
+    _autoCommitEnabled = settings.autoCommitEnabled;
+    _darkThemeEnabled = settings.themeMode == 'dark';
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _tokenController.dispose();
+    _repoController.dispose();
+    _branchController.dispose();
+    _providerController.dispose();
+    _apiKeyController.dispose();
+    _modelController.dispose();
+    _commitTimeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveSettings() async {
+    final repository = _settingsRepository;
+    if (repository == null) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    final settings = AppSettings(
+      githubToken: _tokenController.text.trim(),
+      githubUsername: _githubUsername,
+      selectedRepo: _repoController.text.trim(),
+      selectedBranch: _branchController.text.trim().isEmpty
+          ? 'main'
+          : _branchController.text.trim(),
+      aiProvider: _providerController.text.trim(),
+      aiApiKey: _apiKeyController.text.trim(),
+      aiModel: _modelController.text.trim(),
+      autoCommitEnabled: _autoCommitEnabled,
+      autoCommitTime: _commitTimeController.text.trim().isEmpty
+          ? '23:30'
+          : _commitTimeController.text.trim(),
+      themeMode: _darkThemeEnabled ? 'dark' : 'light',
+    );
+
+    try {
+      await repository.saveSettings(settings);
+      _showMessage('Settings saved.');
+    } catch (error) {
+      _showMessage('Could not save settings: $error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -16,24 +132,27 @@ class SettingsScreen extends StatelessWidget {
           SectionCard(
             title: 'GitHub',
             child: Column(
-              children: const [
+              children: [
                 TextField(
-                  decoration: InputDecoration(
+                  controller: _tokenController,
+                  decoration: const InputDecoration(
                     labelText: 'Personal Access Token',
                     hintText: 'ghp_...'
                   ),
                   obscureText: true,
                 ),
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
                 TextField(
-                  decoration: InputDecoration(
+                  controller: _repoController,
+                  decoration: const InputDecoration(
                     labelText: 'Repository',
                     hintText: 'open-devlog',
                   ),
                 ),
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
                 TextField(
-                  decoration: InputDecoration(
+                  controller: _branchController,
+                  decoration: const InputDecoration(
                     labelText: 'Branch',
                     hintText: 'main',
                   ),
@@ -45,24 +164,27 @@ class SettingsScreen extends StatelessWidget {
           SectionCard(
             title: 'AI provider',
             child: Column(
-              children: const [
+              children: [
                 TextField(
-                  decoration: InputDecoration(
+                  controller: _providerController,
+                  decoration: const InputDecoration(
                     labelText: 'Provider',
                     hintText: 'OpenAI / Gemini / Groq',
                   ),
                 ),
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
                 TextField(
-                  decoration: InputDecoration(
+                  controller: _apiKeyController,
+                  decoration: const InputDecoration(
                     labelText: 'API key',
                     hintText: 'sk-...'
                   ),
                   obscureText: true,
                 ),
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
                 TextField(
-                  decoration: InputDecoration(
+                  controller: _modelController,
+                  decoration: const InputDecoration(
                     labelText: 'Model',
                     hintText: 'gpt-4.1-mini',
                   ),
@@ -77,14 +199,19 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  value: true,
-                  onChanged: (_) {},
+                  value: _autoCommitEnabled,
+                  onChanged: (value) {
+                    setState(() {
+                      _autoCommitEnabled = value;
+                    });
+                  },
                   title: const Text('Auto commit enabled'),
                   subtitle: const Text('Only pushes when summary exists.'),
                 ),
                 const SizedBox(height: 12),
-                const TextField(
-                  decoration: InputDecoration(
+                TextField(
+                  controller: _commitTimeController,
+                  decoration: const InputDecoration(
                     labelText: 'Commit time',
                     hintText: '23:30',
                   ),
@@ -99,8 +226,12 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  value: true,
-                  onChanged: (_) {},
+                  value: _darkThemeEnabled,
+                  onChanged: (value) {
+                    setState(() {
+                      _darkThemeEnabled = value;
+                    });
+                  },
                   title: const Text('Dark theme'),
                 ),
                 const SizedBox(height: 12),
@@ -111,6 +242,12 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: _isSaving ? null : _saveSettings,
+            icon: const Icon(Icons.save),
+            label: const Text('Save settings'),
           ),
         ],
       ),

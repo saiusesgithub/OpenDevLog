@@ -164,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen>
                       label: const Text('Preview Markdown'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => controller.forceSave(),
+                      onPressed: () => _saveAndNavigate(AppTab.preview),
                       icon: const Icon(Icons.upload),
                       label: const Text('Push to GitHub'),
                     ),

@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/journal_entry.dart';
 import '../repositories/local_journal_entry_repository.dart';
+import '../repositories/local_settings_repository.dart';
+import '../services/github_api_service.dart';
 import '../services/markdown_builder.dart';
 import '../widgets/section_card.dart';
 import 'summary_screen.dart';
@@ -18,8 +20,10 @@ class PreviewScreen extends StatefulWidget {
 
 class _PreviewScreenState extends State<PreviewScreen> {
   final _builder = MarkdownBuilder();
+  final _githubService = GitHubApiService();
   String _markdown = '';
   bool _isLoading = true;
+  bool _isPushing = false;
   LocalJournalEntryRepository? _repository;
   JournalEntry? _entry;
 
@@ -58,6 +62,93 @@ class _PreviewScreenState extends State<PreviewScreen> {
     }
   }
 
+  Future<void> _pushToGitHub() async {
+    if (_isPushing) {
+      return;
+    }
+
+    final repository = _repository;
+    if (repository == null) {
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final settingsRepo = LocalSettingsRepository(prefs);
+    final settings = await settingsRepo.getSettings();
+    final token = settings.githubToken?.trim() ?? '';
+    final repo = settings.selectedRepo?.trim() ?? '';
+
+    if (token.isEmpty) {
+      _showMessage('Add a GitHub token in Settings.');
+      return;
+    }
+    if (repo.isEmpty) {
+      _showMessage('Select a GitHub repo in Settings.');
+      return;
+    }
+
+    setState(() {
+      _isPushing = true;
+    });
+
+    try {
+      var username = settings.githubUsername?.trim();
+      if (username == null || username.isEmpty) {
+        final user = await _githubService.getAuthenticatedUser(token);
+        username = user.login;
+        await settingsRepo.saveSettings(
+          settings.copyWith(githubUsername: username),
+        );
+      }
+
+      final branch = settings.selectedBranch.isEmpty
+          ? 'main'
+          : settings.selectedBranch;
+      final path = _buildPath(widget.date);
+      final message = _commitMessage(widget.date, _entry?.isCommitted ?? false);
+
+      final result = await _githubService.upsertFile(
+        token: token,
+        owner: username,
+        repo: repo,
+        path: path,
+        content: _markdown,
+        message: message,
+        branch: branch,
+      );
+
+      final now = DateTime.now();
+      final updated = (await repository.getEntryByDate(widget.date) ??
+              JournalEntry.empty(widget.date))
+          .copyWith(
+        finalMarkdown: _markdown,
+        isCommitted: true,
+        lastCommittedAt: now,
+        githubCommitSha: result.commitSha,
+      );
+
+      await repository.saveEntry(updated);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _entry = updated;
+      });
+      _showMessage(result.created
+          ? 'Devlog pushed to GitHub.'
+          : 'Devlog updated on GitHub.');
+    } catch (error) {
+      _showMessage('GitHub push failed: $error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPushing = false;
+        });
+      }
+    }
+  }
+
   Future<void> _openSummary() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -71,6 +162,40 @@ class _PreviewScreenState extends State<PreviewScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
+  }
+
+  String _buildPath(DateTime date) {
+    final year = date.year.toString().padLeft(4, '0');
+    final monthNum = date.month.toString().padLeft(2, '0');
+    final monthName = _monthName(date.month);
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year/$monthNum-$monthName/$day-$monthNum-$year.md';
+  }
+
+  String _commitMessage(DateTime date, bool wasCommitted) {
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final year = date.year.toString();
+    final label = '$day-$month-$year';
+    return wasCommitted ? 'Update devlog for $label' : 'Add devlog for $label';
+  }
+
+  String _monthName(int month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return months[month - 1];
   }
 
   @override
@@ -106,11 +231,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
             runSpacing: 12,
             children: [
               FilledButton.icon(
-                onPressed: isReady
-                    ? () => _showMessage('GitHub sync in Milestone 7.')
-                    : null,
+                onPressed: isReady && !_isPushing ? _pushToGitHub : null,
                 icon: const Icon(Icons.upload),
-                label: const Text('Push to GitHub'),
+                label: Text(_isPushing ? 'Pushing...' : 'Push to GitHub'),
               ),
               OutlinedButton.icon(
                 onPressed: _openSummary,

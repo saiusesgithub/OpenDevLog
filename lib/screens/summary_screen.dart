@@ -5,6 +5,7 @@ import '../models/journal_entry.dart';
 import '../repositories/local_journal_entry_repository.dart';
 import '../services/ai_summary_service.dart';
 import '../widgets/section_card.dart';
+import 'preview_screen.dart';
 
 class SummaryScreen extends StatefulWidget {
   SummaryScreen({super.key, DateTime? date})
@@ -116,6 +117,20 @@ class _SummaryScreenState extends State<SummaryScreen> {
     }
   }
 
+  Future<void> _openPreview() async {
+    if (_summaryController.text.trim().isNotEmpty && !_isSaving) {
+      await _saveSummary();
+    }
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PreviewScreen(date: widget.date),
+      ),
+    );
+  }
+
   void _showMessage(String message) {
     if (!mounted) {
       return;
@@ -215,12 +230,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     label: const Text('Save Summary'),
                   ),
                   OutlinedButton.icon(
-                    onPressed: () => _showMessage('Preview in Milestone 6.'),
+                    onPressed: _openPreview,
                     icon: const Icon(Icons.preview),
                     label: const Text('Preview Markdown'),
                   ),
                   OutlinedButton.icon(
-                    onPressed: () => _showMessage('GitHub sync in Milestone 7.'),
+                    onPressed: _openPreview,
                     icon: const Icon(Icons.upload),
                     label: const Text('Push to GitHub'),
                   ),
