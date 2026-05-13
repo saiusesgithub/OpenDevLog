@@ -6,6 +6,7 @@ import 'screens/home_screen.dart';
 import 'screens/preview_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/summary_screen.dart';
+import 'services/auto_commit_scheduler.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, this.initialTab = AppTab.home});
@@ -19,6 +20,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   late int _index;
   late final List<Widget> _pages;
+  final AutoCommitScheduler _autoCommitScheduler = AutoCommitScheduler();
 
   @override
   void initState() {
@@ -31,6 +33,7 @@ class _AppShellState extends State<AppShell> {
       PreviewScreen(),
       const SettingsScreen(),
     ];
+    _autoCommitScheduler.start();
   }
 
   void _handleTab(AppTab tab) {
@@ -124,5 +127,11 @@ class _AppShellState extends State<AppShell> {
         ),
       ),
     );
+  }
+  
+  @override
+  void dispose() {
+    _autoCommitScheduler.stop();
+    super.dispose();
   }
 }

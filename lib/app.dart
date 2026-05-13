@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_messenger.dart';
 import 'app_shell.dart';
 import 'navigation/app_routes.dart';
 import 'screens/setup_screen.dart';
@@ -13,6 +14,7 @@ class OpenDevLogApp extends StatelessWidget {
     return MaterialApp(
       title: 'Open DevLog',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: AppMessenger.messengerKey,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.dark,
