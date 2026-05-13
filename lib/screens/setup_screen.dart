@@ -291,12 +291,26 @@ class _SetupScreenState extends State<SetupScreen> {
                     Text('Step 2: Add AI API key',
                         style: textTheme.titleMedium),
                     const SizedBox(height: 8),
-                    TextField(
-                      controller: _providerController,
-                      decoration: const InputDecoration(
-                        labelText: 'AI provider',
-                        hintText: 'OpenAI / Gemini / Groq',
-                      ),
+                    DropdownButtonFormField<String>(
+                      value: _providerController.text.isEmpty ? null : 
+                            (_providerController.text.toLowerCase().contains('gemini') ? 'Gemini' : 
+                             _providerController.text.toLowerCase().contains('openai') ? 'OpenAI' : 'Other'),
+                      items: const [
+                        DropdownMenuItem(value: 'Gemini', child: Text('Gemini (Google)')),
+                        DropdownMenuItem(value: 'OpenAI', child: Text('OpenAI (GPT)')),
+                        DropdownMenuItem(value: 'Other', child: Text('Other')),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _providerController.text = value ?? '';
+                          if (value == 'Gemini') {
+                            _modelController.text = 'gemini-1.5-flash';
+                          } else if (value == 'OpenAI') {
+                            _modelController.text = 'gpt-4o-mini';
+                          }
+                        });
+                      },
+                      decoration: const InputDecoration(labelText: 'AI provider'),
                     ),
                     const SizedBox(height: 8),
                     TextField(
@@ -308,13 +322,43 @@ class _SetupScreenState extends State<SetupScreen> {
                       obscureText: true,
                     ),
                     const SizedBox(height: 8),
-                    TextField(
-                      controller: _modelController,
-                      decoration: const InputDecoration(
-                        labelText: 'Model name',
-                        hintText: 'gpt-4.1-mini',
+                    if (_providerController.text == 'Gemini')
+                      DropdownButtonFormField<String>(
+                        value: _modelController.text.isEmpty ? 'gemini-1.5-flash' : _modelController.text,
+                        items: const [
+                          DropdownMenuItem(value: 'gemini-1.5-flash', child: Text('Gemini 1.5 Flash')),
+                          DropdownMenuItem(value: 'gemini-1.5-pro', child: Text('Gemini 1.5 Pro')),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _modelController.text = value ?? '';
+                          });
+                        },
+                        decoration: const InputDecoration(labelText: 'Model name'),
+                      )
+                    else if (_providerController.text == 'OpenAI')
+                      DropdownButtonFormField<String>(
+                        value: _modelController.text.isEmpty ? 'gpt-4o-mini' : _modelController.text,
+                        items: const [
+                          DropdownMenuItem(value: 'gpt-4o-mini', child: Text('GPT-4o Mini')),
+                          DropdownMenuItem(value: 'gpt-4o', child: Text('GPT-4o')),
+                          DropdownMenuItem(value: 'gpt-3.5-turbo', child: Text('GPT-3.5 Turbo')),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _modelController.text = value ?? '';
+                          });
+                        },
+                        decoration: const InputDecoration(labelText: 'Model name'),
+                      )
+                    else
+                      TextField(
+                        controller: _modelController,
+                        decoration: const InputDecoration(
+                          labelText: 'Model name',
+                          hintText: 'gemini-1.5-flash',
+                        ),
                       ),
-                    ),
                     const SizedBox(height: 24),
                     Row(
                       children: [

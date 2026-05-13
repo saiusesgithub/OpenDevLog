@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/app_settings.dart';
 import '../models/journal_entry.dart';
 import '../repositories/local_journal_entry_repository.dart';
+import '../repositories/local_settings_repository.dart';
 import '../services/ai_summary_service.dart';
 import '../widgets/section_card.dart';
 import 'preview_screen.dart';
@@ -23,6 +25,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
   final _summaryService = AiSummaryService();
 
   LocalJournalEntryRepository? _repository;
+  LocalSettingsRepository? _settingsRepository;
   JournalEntry? _entry;
   bool _isLoading = true;
   bool _isGenerating = false;
@@ -37,6 +40,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
   Future<void> _loadEntry() async {
     final prefs = await SharedPreferences.getInstance();
     final repository = LocalJournalEntryRepository(prefs);
+    final settingsRepository = LocalSettingsRepository(prefs);
     final entry = await repository.getEntryByDate(widget.date) ??
         JournalEntry.empty(widget.date);
 
@@ -45,6 +49,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
     }
 
     _repository = repository;
+    _settingsRepository = settingsRepository;
     _entry = entry;
     _roughController.text = entry.roughDiary;
     _summaryController.text = entry.aiSummary;
@@ -68,17 +73,46 @@ class _SummaryScreenState extends State<SummaryScreen> {
       return;
     }
 
+    final settings = await _loadSettings();
+    if (settings == null) {
+      _showMessage('Add AI settings first.');
+      return;
+    }
+    final provider = settings.aiProvider?.trim() ?? '';
+    final apiKey = settings.aiApiKey?.trim() ?? '';
+    var model = settings.aiModel?.trim() ?? '';
+
+    if (provider.isEmpty) {
+      _showMessage('Set AI provider in Settings.');
+      return;
+    }
+    if (apiKey.isEmpty) {
+      _showMessage('Set AI API key in Settings.');
+      return;
+    }
+    if (model.isEmpty && _isGemini(provider)) {
+      model = 'gemini-1.5-flash';
+    }
+    if (model.isEmpty) {
+      _showMessage('Set AI model name in Settings.');
+      return;
+    }
+
     setState(() {
       _isGenerating = true;
     });
 
     try {
-      final result =
-          await _summaryService.generate(roughDiary: roughDiary);
+      final result = await _summaryService.generate(
+        roughDiary: roughDiary,
+        provider: provider,
+        apiKey: apiKey,
+        model: model,
+      );
       _summaryController.text = result;
       _showMessage('Summary generated. Review before saving.');
-    } catch (_) {
-      _showMessage('Summary generation failed. Try again.');
+    } catch (e) {
+      _showMessage('Error: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -86,6 +120,27 @@ class _SummaryScreenState extends State<SummaryScreen> {
         });
       }
     }
+  }
+
+  Future<AppSettings?> _loadSettings() async {
+    final repository = _settingsRepository;
+    if (repository != null) {
+      return repository.getSettings();
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final fallback = LocalSettingsRepository(prefs);
+      _settingsRepository = fallback;
+      return fallback.getSettings();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _isGemini(String provider) {
+    final normalized = provider.trim().toLowerCase();
+    return normalized.contains('gemini') || normalized.contains('google');
   }
 
   Future<void> _saveSummary() async {
@@ -155,6 +210,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
           height: cardHeight,
           child: SectionCard(
             title: 'Rough diary',
+            expandChild: true,
             child: TextField(
               controller: _roughController,
               expands: true,
@@ -173,6 +229,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
           height: cardHeight,
           child: SectionCard(
             title: 'AI summary (editable)',
+            expandChild: true,
             child: TextField(
               controller: _summaryController,
               expands: true,

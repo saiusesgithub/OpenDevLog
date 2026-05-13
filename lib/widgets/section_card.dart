@@ -6,11 +6,13 @@ class SectionCard extends StatelessWidget {
     required this.title,
     required this.child,
     this.trailing,
+    this.expandChild = false,
   });
 
   final String title;
   final Widget child;
   final Widget? trailing;
+  final bool expandChild;
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +22,7 @@ class SectionCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
+          mainAxisSize: expandChild ? MainAxisSize.max : MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -30,7 +33,7 @@ class SectionCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            child,
+            if (expandChild) Expanded(child: child) else child,
           ],
         ),
       ),

@@ -165,12 +165,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: 'AI provider',
             child: Column(
               children: [
-                TextField(
-                  controller: _providerController,
-                  decoration: const InputDecoration(
-                    labelText: 'Provider',
-                    hintText: 'OpenAI / Gemini / Groq',
-                  ),
+                DropdownButtonFormField<String>(
+                  value: _providerController.text.isEmpty ? null : 
+                        (_providerController.text.toLowerCase().contains('gemini') ? 'Gemini' : 
+                         _providerController.text.toLowerCase().contains('openai') ? 'OpenAI' : 'Other'),
+                  items: const [
+                    DropdownMenuItem(value: 'Gemini', child: Text('Gemini (Google)')),
+                    DropdownMenuItem(value: 'OpenAI', child: Text('OpenAI (GPT)')),
+                    DropdownMenuItem(value: 'Other', child: Text('Other')),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _providerController.text = value ?? '';
+                      if (value == 'Gemini') {
+                        _modelController.text = 'gemini-1.5-flash';
+                      } else if (value == 'OpenAI') {
+                        _modelController.text = 'gpt-4o-mini';
+                      }
+                    });
+                  },
+                  decoration: const InputDecoration(labelText: 'Provider'),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -182,13 +196,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   obscureText: true,
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _modelController,
-                  decoration: const InputDecoration(
-                    labelText: 'Model',
-                    hintText: 'gpt-4.1-mini',
+                if (_providerController.text == 'Gemini')
+                  DropdownButtonFormField<String>(
+                    value: _modelController.text.isEmpty ? 'gemini-1.5-flash' : _modelController.text,
+                    items: const [
+                      DropdownMenuItem(value: 'gemini-1.5-flash', child: Text('Gemini 1.5 Flash')),
+                      DropdownMenuItem(value: 'gemini-1.5-pro', child: Text('Gemini 1.5 Pro')),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _modelController.text = value ?? '';
+                      });
+                    },
+                    decoration: const InputDecoration(labelText: 'Model'),
+                  )
+                else if (_providerController.text == 'OpenAI')
+                  DropdownButtonFormField<String>(
+                    value: _modelController.text.isEmpty ? 'gpt-4o-mini' : _modelController.text,
+                    items: const [
+                      DropdownMenuItem(value: 'gpt-4o-mini', child: Text('GPT-4o Mini')),
+                      DropdownMenuItem(value: 'gpt-4o', child: Text('GPT-4o')),
+                      DropdownMenuItem(value: 'gpt-3.5-turbo', child: Text('GPT-3.5 Turbo')),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _modelController.text = value ?? '';
+                      });
+                    },
+                    decoration: const InputDecoration(labelText: 'Model'),
+                  )
+                else
+                  TextField(
+                    controller: _modelController,
+                    decoration: const InputDecoration(
+                      labelText: 'Model',
+                      hintText: 'gemini-1.5-flash',
+                    ),
                   ),
-                ),
               ],
             ),
           ),
