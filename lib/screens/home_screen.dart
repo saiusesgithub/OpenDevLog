@@ -2,19 +2,96 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../controllers/journal_editor_controller.dart';
 import '../navigation/app_tabs.dart';
 import '../widgets/section_card.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.onNavigate});
 
   final ValueChanged<AppTab> onNavigate;
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen>
+    with WidgetsBindingObserver {
+  JournalEditorController? _controller;
+  TextEditingController? _textController;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadController();
+  }
+
+  Future<void> _loadController() async {
+    final controller =
+        await JournalEditorController.create(DateTime.now());
+    if (!mounted) {
+      controller.dispose();
+      return;
+    }
+    final textController =
+        TextEditingController(text: controller.draftText);
+    textController.addListener(() {
+      controller.updateText(textController.text);
+    });
+
+    setState(() {
+      _controller = controller;
+      _textController = textController;
+      _isLoading = false;
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _controller?.forceSave();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _textController?.dispose();
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveAndNavigate(AppTab tab) async {
+    final controller = _controller;
+    if (controller == null) {
+      return;
+    }
+    await controller.forceSave();
+    if (!mounted) {
+      return;
+    }
+    widget.onNavigate(tab);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final controller = _controller;
+    final textController = _textController;
+    if (controller == null || textController == null) {
+      return const SizedBox.shrink();
+    }
+
     final textTheme = Theme.of(context).textTheme;
     final screenHeight = MediaQuery.of(context).size.height;
     final editorHeight = math.max(320.0, screenHeight * 0.45);
+    final dateLabel = _formatDate(DateTime.now());
 
     return SingleChildScrollView(
       child: Column(
@@ -27,13 +104,13 @@ class HomeScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('May 13, 2026', style: textTheme.headlineSmall),
+                    Text(dateLabel, style: textTheme.headlineSmall),
                     const SizedBox(height: 6),
                     Text('Streak: 7 days', style: textTheme.bodyMedium),
                   ],
                 ),
               ),
-              _SaveStatusChip(),
+              _SaveStatusChip(controller: controller),
             ],
           ),
           const SizedBox(height: 20),
@@ -46,6 +123,7 @@ class HomeScreen extends StatelessWidget {
             child: SizedBox(
               height: editorHeight,
               child: TextField(
+                controller: textController,
                 expands: true,
                 maxLines: null,
                 minLines: null,
@@ -62,27 +140,27 @@ class HomeScreen extends StatelessWidget {
             runSpacing: 12,
             children: [
               FilledButton.icon(
-                onPressed: () => onNavigate(AppTab.summary),
+                onPressed: () => _saveAndNavigate(AppTab.summary),
                 icon: const Icon(Icons.auto_awesome),
                 label: const Text('Generate Summary'),
               ),
               OutlinedButton.icon(
-                onPressed: () => onNavigate(AppTab.preview),
+                onPressed: () => _saveAndNavigate(AppTab.preview),
                 icon: const Icon(Icons.preview),
                 label: const Text('Preview Markdown'),
               ),
               OutlinedButton.icon(
-                onPressed: () {},
+                onPressed: () => controller.forceSave(),
                 icon: const Icon(Icons.upload),
                 label: const Text('Push to GitHub'),
               ),
               TextButton.icon(
-                onPressed: () => onNavigate(AppTab.entries),
+                onPressed: () => widget.onNavigate(AppTab.entries),
                 icon: const Icon(Icons.calendar_month),
                 label: const Text('Previous Entries'),
               ),
               TextButton.icon(
-                onPressed: () => onNavigate(AppTab.settings),
+                onPressed: () => widget.onNavigate(AppTab.settings),
                 icon: const Icon(Icons.tune),
                 label: const Text('Settings'),
               ),
@@ -92,28 +170,71 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+
+  String _formatDate(DateTime date) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    final month = months[date.month - 1];
+    return '$month ${date.day}, ${date.year}';
+  }
 }
 
 class _SaveStatusChip extends StatelessWidget {
+  const _SaveStatusChip({required this.controller});
+
+  final JournalEditorController controller;
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final dotColor = _statusColor(colorScheme);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colorScheme.outline.withOpacity(0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.circle, size: 8, color: colorScheme.primary),
-          const SizedBox(width: 8),
-          const Text('Saved locally 5 sec ago'),
-        ],
-      ),
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: colorScheme.outline.withOpacity(0.25)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.circle, size: 8, color: dotColor),
+              const SizedBox(width: 8),
+              Text(controller.statusLabel),
+            ],
+          ),
+        );
+      },
     );
+  }
+
+  Color _statusColor(ColorScheme colorScheme) {
+    switch (controller.saveState) {
+      case SaveState.failed:
+        return colorScheme.error;
+      case SaveState.unsaved:
+        return colorScheme.tertiary;
+      case SaveState.saving:
+        return colorScheme.primary;
+      case SaveState.saved:
+      case SaveState.idle:
+        return colorScheme.primary;
+    }
   }
 }
