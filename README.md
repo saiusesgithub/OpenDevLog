@@ -1,56 +1,62 @@
-# OpenDevLog
+# Open DevLog
 
-## GitHub OAuth Setup
+A modern, open-source daily developer log and journaling application built with Flutter. Open DevLog is designed to help developers seamlessly record their daily progress, track blockers, generate AI-powered summaries, and synchronize their logs directly with GitHub.
 
-### 1. Create a GitHub OAuth App
+## Features
 
-1. Open GitHub and go to `Settings`.
-2. Open `Developer settings`.
-3. Open `OAuth Apps`.
-4. Click `New OAuth App`.
-5. Set the application name to `OpenDevLog`.
-6. Set the homepage URL to `http://localhost:5173`.
-7. Set the authorization callback URL to `http://localhost:5173/callback`.
-8. Create the app and copy the client ID and client secret.
+- 📝 **Markdown Editor**: A rich daily journal editor supporting markdown formatting with local auto-save capabilities.
+- ✨ **AI Summary Generation**: Automatically generate daily summaries from your raw notes, categorizing accomplishments, blockers, and ideas.
+- 🔄 **GitHub Sync**: Connect to your GitHub account and synchronize your daily logs to a remote repository effortlessly.
+- 📊 **Insights & History**: View your entry history, track streaks, and visualize insights into your development habits.
+- 📅 **Calendar View**: Easily navigate and review past entries using the integrated calendar interface.
+- 🎨 **Sleek UI**: A beautiful dark theme featuring glassmorphism elements, glowing borders, and responsive design for both desktop and mobile platforms.
 
-### 2. Configure the backend
+## Getting Started
 
-Create `backend/.env` with:
+These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
 
-```env
-GITHUB_CLIENT_ID=your_client_id
-GITHUB_CLIENT_SECRET=your_client_secret
-REDIRECT_URI=http://localhost:5173/callback
-PORT=3001
-```
+### Prerequisites
 
-### 3. Install and run locally
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) (version ^3.11.4)
+- Git
 
-1. In the project root run `npm install`.
-2. In `backend/` run `npm install`.
-3. In one terminal run `npm run dev`.
-4. In another terminal run `npm run dev:backend`.
+### Installation
 
-### 4. Run with Docker
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/opendevlog.git
+   cd opendevlog
+   ```
 
-Build the image:
+2. Install dependencies:
+   ```bash
+   flutter pub get
+   ```
 
-```bash
-docker build -t opendevlog .
-```
+3. Run the app:
+   ```bash
+   flutter run
+   ```
 
-Run both frontend and backend in one container:
+## Project Structure
 
-```bash
-docker run --rm -it -p 5173:5173 -p 3001:3001 -e GITHUB_CLIENT_ID=your_client_id -e GITHUB_CLIENT_SECRET=your_client_secret -e REDIRECT_URI=http://localhost:5173/callback -e PORT=3001 opendevlog
-```
+The project follows a feature-based directory structure inside the `lib/` folder:
 
-### 5. Use GitHub sync
+- `core/`: Contains core application settings such as themes.
+- `screens/`: Contains all the main UI screens (e.g., Journal, Calendar, GitHub Sync).
+- `widgets/`: Reusable custom UI components like `GlassCard` and `GlowingBorder`.
+- `main.dart`: The main entry point of the application.
 
-1. Click `Connect GitHub`.
-2. Approve the OAuth app.
-3. Return to the app.
-4. Create a new repo named `opendevlog` or select an existing repo.
-5. Click `Sync Now`.
+## Technologies Used
 
-The app writes one file named `devlog.md` and makes only one commit per manual sync.
+- [Flutter](https://flutter.dev/) - UI toolkit for building natively compiled applications
+- [Lucide Icons](https://pub.dev/packages/lucide_icons) - Beautiful and consistent icon set
+- [Google Fonts](https://pub.dev/packages/google_fonts) - Typography
+
+## Contributing
+
+Contributions are welcome! Feel free to open an issue or submit a pull request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
