@@ -7,9 +7,19 @@ import '../navigation/app_tabs.dart';
 import '../widgets/section_card.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.onNavigate});
+  HomeScreen({
+    super.key,
+    this.onNavigate,
+    DateTime? date,
+    this.showNavigationActions = true,
+    this.onBack,
+  })  : date = date ?? DateTime.now(),
+        assert(showNavigationActions ? onNavigate != null : true);
 
-  final ValueChanged<AppTab> onNavigate;
+  final ValueChanged<AppTab>? onNavigate;
+  final DateTime date;
+  final bool showNavigationActions;
+  final VoidCallback? onBack;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -29,8 +39,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _loadController() async {
-    final controller =
-        await JournalEditorController.create(DateTime.now());
+    final controller = await JournalEditorController.create(widget.date);
     if (!mounted) {
       controller.dispose();
       return;
@@ -73,7 +82,11 @@ class _HomeScreenState extends State<HomeScreen>
     if (!mounted) {
       return;
     }
-    widget.onNavigate(tab);
+    final onNavigate = widget.onNavigate;
+    if (onNavigate == null) {
+      return;
+    }
+    onNavigate(tab);
   }
 
   @override
@@ -91,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen>
     final textTheme = Theme.of(context).textTheme;
     final screenHeight = MediaQuery.of(context).size.height;
     final editorHeight = math.max(320.0, screenHeight * 0.45);
-    final dateLabel = _formatDate(DateTime.now());
+    final dateLabel = _formatDate(widget.date);
 
     return SingleChildScrollView(
       child: Column(
@@ -138,33 +151,44 @@ class _HomeScreenState extends State<HomeScreen>
           Wrap(
             spacing: 12,
             runSpacing: 12,
-            children: [
-              FilledButton.icon(
-                onPressed: () => _saveAndNavigate(AppTab.summary),
-                icon: const Icon(Icons.auto_awesome),
-                label: const Text('Generate Summary'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => _saveAndNavigate(AppTab.preview),
-                icon: const Icon(Icons.preview),
-                label: const Text('Preview Markdown'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => controller.forceSave(),
-                icon: const Icon(Icons.upload),
-                label: const Text('Push to GitHub'),
-              ),
-              TextButton.icon(
-                onPressed: () => widget.onNavigate(AppTab.entries),
-                icon: const Icon(Icons.calendar_month),
-                label: const Text('Previous Entries'),
-              ),
-              TextButton.icon(
-                onPressed: () => widget.onNavigate(AppTab.settings),
-                icon: const Icon(Icons.tune),
-                label: const Text('Settings'),
-              ),
-            ],
+            children: widget.showNavigationActions
+                ? [
+                    FilledButton.icon(
+                      onPressed: () => _saveAndNavigate(AppTab.summary),
+                      icon: const Icon(Icons.auto_awesome),
+                      label: const Text('Generate Summary'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _saveAndNavigate(AppTab.preview),
+                      icon: const Icon(Icons.preview),
+                      label: const Text('Preview Markdown'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => controller.forceSave(),
+                      icon: const Icon(Icons.upload),
+                      label: const Text('Push to GitHub'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => widget.onNavigate?.call(AppTab.entries),
+                      icon: const Icon(Icons.calendar_month),
+                      label: const Text('Previous Entries'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => widget.onNavigate?.call(AppTab.settings),
+                      icon: const Icon(Icons.tune),
+                      label: const Text('Settings'),
+                    ),
+                  ]
+                : [
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        await controller.forceSave();
+                        widget.onBack?.call();
+                      },
+                      icon: const Icon(Icons.arrow_back),
+                      label: const Text('Back to entries'),
+                    ),
+                  ],
           ),
         ],
       ),
