@@ -80,4 +80,13 @@ class AppSettings {
       themeMode: json['themeMode'] as String? ?? 'dark',
     );
   }
+
+  bool get isSetupComplete {
+    final hasGitHub = githubToken?.isNotEmpty == true &&
+        selectedRepo?.isNotEmpty == true;
+    final hasAi = aiProvider?.isNotEmpty == true &&
+        aiApiKey?.isNotEmpty == true &&
+        aiModel?.isNotEmpty == true;
+    return hasGitHub && hasAi;
+  }
 }

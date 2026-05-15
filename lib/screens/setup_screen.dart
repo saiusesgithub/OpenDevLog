@@ -13,6 +13,8 @@ class SetupScreen extends StatefulWidget {
   State<SetupScreen> createState() => _SetupScreenState();
 }
 
+enum _RepoMode { existing, newRepo }
+
 class _SetupScreenState extends State<SetupScreen> {
   final _tokenController = TextEditingController();
   final _repoController = TextEditingController(text: 'open-devlog');
@@ -20,6 +22,11 @@ class _SetupScreenState extends State<SetupScreen> {
   final _providerController = TextEditingController();
   final _apiKeyController = TextEditingController();
   final _modelController = TextEditingController();
+  final _pageController = PageController();
+
+  static const int _pageCount = 3;
+  int _pageIndex = 0;
+  _RepoMode _repoMode = _RepoMode.existing;
 
   final _githubService = GitHubApiService();
   LocalSettingsRepository? _settingsRepository;
@@ -53,22 +60,15 @@ class _SetupScreenState extends State<SetupScreen> {
     _username = settings.githubUsername;
     _selectedRepo = settings.selectedRepo;
 
+    _repoMode = _selectedRepo == null || _selectedRepo!.isEmpty
+      ? _RepoMode.newRepo
+      : _RepoMode.existing;
+
     if (mounted) {
       setState(() {
         _isLoading = false;
       });
     }
-  }
-
-  @override
-  void dispose() {
-    _tokenController.dispose();
-    _repoController.dispose();
-    _branchController.dispose();
-    _providerController.dispose();
-    _apiKeyController.dispose();
-    _modelController.dispose();
-    super.dispose();
   }
 
   Future<void> _fetchRepos() async {
@@ -129,6 +129,7 @@ class _SetupScreenState extends State<SetupScreen> {
       setState(() {
         _selectedRepo = repo.name;
         _repos = [..._repos, repo];
+        _repoMode = _RepoMode.existing;
       });
       _showMessage('Repo ${repo.name} created.');
     } catch (error) {
@@ -155,7 +156,9 @@ class _SetupScreenState extends State<SetupScreen> {
     final settings = AppSettings(
       githubToken: _tokenController.text.trim(),
       githubUsername: _username,
-      selectedRepo: _selectedRepo ?? _repoController.text.trim(),
+      selectedRepo: _repoMode == _RepoMode.newRepo
+          ? _repoController.text.trim()
+          : _selectedRepo ?? _repoController.text.trim(),
       selectedBranch: _branchController.text.trim().isEmpty
           ? 'main'
           : _branchController.text.trim(),
@@ -187,6 +190,320 @@ class _SetupScreenState extends State<SetupScreen> {
     );
   }
 
+  void _goToPage(int index) {
+    if (index < 0 || index >= _pageCount) {
+      return;
+    }
+    setState(() {
+      _pageIndex = index;
+    });
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _nextPage() {
+    _goToPage(_pageIndex + 1);
+  }
+
+  void _previousPage() {
+    _goToPage(_pageIndex - 1);
+  }
+
+  Widget _buildHeader(TextTheme textTheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('First-time setup', style: textTheme.headlineMedium),
+        const SizedBox(height: 8),
+        Text(
+          'Connect GitHub, add your AI key, and choose a repo. No data is sent until you push.',
+          style: textTheme.bodyMedium,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStepIndicator() {
+    return Row(
+      children: List.generate(_pageCount, (index) {
+        final isActive = index == _pageIndex;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          margin: const EdgeInsets.only(right: 8),
+          height: 8,
+          width: isActive ? 28 : 12,
+          decoration: BoxDecoration(
+            color: isActive
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.surfaceVariant,
+            borderRadius: BorderRadius.circular(999),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildGitHubStep(TextTheme textTheme) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Step 1: Connect GitHub', style: textTheme.titleMedium),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _tokenController,
+            decoration: const InputDecoration(
+              labelText: 'GitHub Personal Access Token',
+              hintText: 'ghp_...',
+            ),
+            obscureText: true,
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _branchController,
+            decoration: const InputDecoration(
+              labelText: 'Default branch',
+              hintText: 'main',
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (_username != null)
+            Text('Signed in as $_username', style: textTheme.bodySmall),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: _isFetching ? null : _fetchRepos,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Fetch repos'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRepoStep(TextTheme textTheme) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Step 2: Choose a repo', style: textTheme.titleMedium),
+          const SizedBox(height: 12),
+          ToggleButtons(
+            isSelected: [
+              _repoMode == _RepoMode.existing,
+              _repoMode == _RepoMode.newRepo,
+            ],
+            onPressed: (index) {
+              setState(() {
+                _repoMode = index == 0 ? _RepoMode.existing : _RepoMode.newRepo;
+              });
+            },
+            borderRadius: BorderRadius.circular(12),
+            children: const [
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text('Use existing'),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text('Create new'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_repoMode == _RepoMode.existing) ...[
+            if (_repos.isNotEmpty)
+              DropdownButtonFormField<String>(
+                value: _selectedRepo,
+                items: _repos
+                    .map((repo) => DropdownMenuItem(
+                          value: repo.name,
+                          child: Text(repo.name),
+                        ))
+                    .toList(),
+                decoration: const InputDecoration(
+                  labelText: 'Select existing repo',
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedRepo = value;
+                  });
+                },
+              )
+            else
+              Text('No repos loaded yet. Go back and fetch repos.',
+                  style: textTheme.bodySmall),
+          ] else ...[
+            TextField(
+              controller: _repoController,
+              decoration: const InputDecoration(
+                labelText: 'New repo name',
+                hintText: 'open-devlog',
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _isCreating ? null : _createRepo,
+              icon: const Icon(Icons.add),
+              label: const Text('Create repo'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiStep(TextTheme textTheme) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Step 3: Add AI API key', style: textTheme.titleMedium),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: _providerController.text.isEmpty
+                ? null
+                : (_providerController.text.toLowerCase().contains('gemini')
+                    ? 'Gemini'
+                    : _providerController.text
+                            .toLowerCase()
+                            .contains('openai')
+                        ? 'OpenAI'
+                        : 'Other'),
+            items: const [
+              DropdownMenuItem(
+                value: 'Gemini',
+                child: Text('Gemini (Google)'),
+              ),
+              DropdownMenuItem(
+                value: 'OpenAI',
+                child: Text('OpenAI (GPT)'),
+              ),
+              DropdownMenuItem(
+                value: 'Other',
+                child: Text('Other'),
+              ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _providerController.text = value ?? '';
+                if (value == 'Gemini') {
+                  _modelController.text = 'gemini-1.5-flash';
+                } else if (value == 'OpenAI') {
+                  _modelController.text = 'gpt-4o-mini';
+                }
+              });
+            },
+            decoration: const InputDecoration(labelText: 'AI provider'),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _apiKeyController,
+            decoration: const InputDecoration(
+              labelText: 'API key',
+              hintText: 'sk-...',
+            ),
+            obscureText: true,
+          ),
+          const SizedBox(height: 8),
+          if (_providerController.text == 'Gemini')
+            DropdownButtonFormField<String>(
+              value: _modelController.text.isEmpty
+                  ? 'gemini-1.5-flash'
+                  : _modelController.text,
+              items: const [
+                DropdownMenuItem(
+                  value: 'gemini-1.5-flash',
+                  child: Text('Gemini 1.5 Flash'),
+                ),
+                DropdownMenuItem(
+                  value: 'gemini-1.5-pro',
+                  child: Text('Gemini 1.5 Pro'),
+                ),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  _modelController.text = value ?? '';
+                });
+              },
+              decoration: const InputDecoration(labelText: 'Model name'),
+            )
+          else if (_providerController.text == 'OpenAI')
+            DropdownButtonFormField<String>(
+              value: _modelController.text.isEmpty
+                  ? 'gpt-4o-mini'
+                  : _modelController.text,
+              items: const [
+                DropdownMenuItem(
+                  value: 'gpt-4o-mini',
+                  child: Text('GPT-4o Mini'),
+                ),
+                DropdownMenuItem(
+                  value: 'gpt-4o',
+                  child: Text('GPT-4o'),
+                ),
+                DropdownMenuItem(
+                  value: 'gpt-3.5-turbo',
+                  child: Text('GPT-3.5 Turbo'),
+                ),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  _modelController.text = value ?? '';
+                });
+              },
+              decoration: const InputDecoration(labelText: 'Model name'),
+            )
+          else
+            TextField(
+              controller: _modelController,
+              decoration: const InputDecoration(
+                labelText: 'Model name',
+                hintText: 'gemini-1.5-flash',
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooterActions() {
+    if (_pageIndex == _pageCount - 1) {
+      return Row(
+        children: [
+          FilledButton(
+            onPressed: _isSaving ? null : _saveAndContinue,
+            child: const Text('Start journaling'),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton(
+            onPressed: () {
+              Navigator.of(context).pushReplacementNamed(AppRoutes.app);
+            },
+            child: const Text('Skip for now'),
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        if (_pageIndex > 0)
+          OutlinedButton(
+            onPressed: _previousPage,
+            child: const Text('Back'),
+          ),
+        const SizedBox(width: 12),
+        FilledButton(
+          onPressed: _nextPage,
+          child: const Text('Next'),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -203,180 +520,39 @@ class _SetupScreenState extends State<SetupScreen> {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          return SingleChildScrollView(
+          return Padding(
             padding: const EdgeInsets.all(24),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 720),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('First-time setup', style: textTheme.headlineMedium),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Connect GitHub, add your AI key, and choose a repo. No data is sent until you push.',
-                      style: textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 24),
-                    Text('Step 1: Connect GitHub',
-                        style: textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _tokenController,
-                      decoration: const InputDecoration(
-                        labelText: 'GitHub Personal Access Token',
-                        hintText: 'ghp_...'
-                      ),
-                      obscureText: true,
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _branchController,
-                      decoration: const InputDecoration(
-                        labelText: 'Default branch',
-                        hintText: 'main',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (_username != null)
-                      Text('Signed in as $_username',
-                          style: textTheme.bodySmall),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        FilledButton.icon(
-                          onPressed: _isFetching ? null : _fetchRepos,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Fetch repos'),
-                        ),
-                        const SizedBox(width: 12),
-                        OutlinedButton.icon(
-                          onPressed: _isCreating ? null : _createRepo,
-                          icon: const Icon(Icons.add),
-                          label: const Text('Create repo'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (_repos.isNotEmpty)
-                      DropdownButtonFormField<String>(
-                        value: _selectedRepo,
-                        items: _repos
-                            .map((repo) => DropdownMenuItem(
-                                  value: repo.name,
-                                  child: Text(repo.name),
-                                ))
-                            .toList(),
-                        decoration: const InputDecoration(
-                          labelText: 'Select existing repo',
-                        ),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedRepo = value;
-                          });
-                        },
-                      )
-                    else
-                      Text('No repos loaded yet.',
-                          style: textTheme.bodySmall),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _repoController,
-                      decoration: const InputDecoration(
-                        labelText: 'New repo name',
-                        hintText: 'open-devlog',
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text('Step 2: Add AI API key',
-                        style: textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: _providerController.text.isEmpty ? null : 
-                            (_providerController.text.toLowerCase().contains('gemini') ? 'Gemini' : 
-                             _providerController.text.toLowerCase().contains('openai') ? 'OpenAI' : 'Other'),
-                      items: const [
-                        DropdownMenuItem(value: 'Gemini', child: Text('Gemini (Google)')),
-                        DropdownMenuItem(value: 'OpenAI', child: Text('OpenAI (GPT)')),
-                        DropdownMenuItem(value: 'Other', child: Text('Other')),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          _providerController.text = value ?? '';
-                          if (value == 'Gemini') {
-                            _modelController.text = 'gemini-1.5-flash';
-                          } else if (value == 'OpenAI') {
-                            _modelController.text = 'gpt-4o-mini';
-                          }
-                        });
-                      },
-                      decoration: const InputDecoration(labelText: 'AI provider'),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _apiKeyController,
-                      decoration: const InputDecoration(
-                        labelText: 'API key',
-                        hintText: 'sk-...'
-                      ),
-                      obscureText: true,
-                    ),
-                    const SizedBox(height: 8),
-                    if (_providerController.text == 'Gemini')
-                      DropdownButtonFormField<String>(
-                        value: _modelController.text.isEmpty ? 'gemini-1.5-flash' : _modelController.text,
-                        items: const [
-                          DropdownMenuItem(value: 'gemini-1.5-flash', child: Text('Gemini 1.5 Flash')),
-                          DropdownMenuItem(value: 'gemini-1.5-pro', child: Text('Gemini 1.5 Pro')),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            _modelController.text = value ?? '';
-                          });
-                        },
-                        decoration: const InputDecoration(labelText: 'Model name'),
-                      )
-                    else if (_providerController.text == 'OpenAI')
-                      DropdownButtonFormField<String>(
-                        value: _modelController.text.isEmpty ? 'gpt-4o-mini' : _modelController.text,
-                        items: const [
-                          DropdownMenuItem(value: 'gpt-4o-mini', child: Text('GPT-4o Mini')),
-                          DropdownMenuItem(value: 'gpt-4o', child: Text('GPT-4o')),
-                          DropdownMenuItem(value: 'gpt-3.5-turbo', child: Text('GPT-3.5 Turbo')),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            _modelController.text = value ?? '';
-                          });
-                        },
-                        decoration: const InputDecoration(labelText: 'Model name'),
-                      )
-                    else
-                      TextField(
-                        controller: _modelController,
-                        decoration: const InputDecoration(
-                          labelText: 'Model name',
-                          hintText: 'gemini-1.5-flash',
-                        ),
-                      ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        FilledButton(
-                          onPressed: _isSaving ? null : _saveAndContinue,
-                          child: const Text('Start journaling'),
-                        ),
-                        const SizedBox(width: 12),
-                        OutlinedButton(
-                          onPressed: () {
-                            Navigator.of(context)
-                                .pushReplacementNamed(AppRoutes.app);
+                child: SizedBox(
+                  height: constraints.maxHeight,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(textTheme),
+                      const SizedBox(height: 16),
+                      _buildStepIndicator(),
+                      const SizedBox(height: 20),
+                      Expanded(
+                        child: PageView(
+                          controller: _pageController,
+                          onPageChanged: (index) {
+                            setState(() {
+                              _pageIndex = index;
+                            });
                           },
-                          child: const Text('Skip for now'),
+                          children: [
+                            _buildGitHubStep(textTheme),
+                            _buildRepoStep(textTheme),
+                            _buildAiStep(textTheme),
+                          ],
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildFooterActions(),
+                    ],
+                  ),
                 ),
               ),
             ),
