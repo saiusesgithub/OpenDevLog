@@ -50,14 +50,11 @@ class AiSummaryService {
     if (apiKey.isEmpty) {
       throw AiSummaryException('Missing Gemini API key.');
     }
-    
-    // Normalize model name: lowercase and replace spaces with hyphens
-    var modelName = model.trim().toLowerCase().replaceAll(' ', '-');
-    
-    // Fallback to a safe model if empty
-    if (modelName.isEmpty) {
-      modelName = 'gemini-1.5-flash';
-    }
+
+    final modelName = await _resolveGeminiModel(
+      apiKey: apiKey,
+      requestedModel: model,
+    );
 
     try {
       final generativeModel = GenerativeModel(
@@ -148,6 +145,106 @@ class AiSummaryService {
   bool _isOpenAi(String provider) {
     final normalized = provider.trim().toLowerCase();
     return normalized.contains('openai') || normalized.contains('gpt');
+  }
+
+  String _normalizeGeminiModel(String model) {
+    final trimmed = model.trim();
+    if (trimmed.isEmpty) {
+      return 'gemini-1.5-flash';
+    }
+
+    final lower = trimmed.toLowerCase();
+    if (lower == 'gemini-1.5-flash' || lower == 'gemini-1.5-flash-latest') {
+      return 'gemini-1.5-flash';
+    }
+    if (lower == 'gemini-1.5-pro' || lower == 'gemini-1.5-pro-latest') {
+      return 'gemini-1.5-pro';
+    }
+    if (lower.contains('flash') && !lower.contains('gemini')) {
+      return 'gemini-1.5-flash';
+    }
+    if (lower.contains('pro') && !lower.contains('gemini')) {
+      return 'gemini-1.5-pro';
+    }
+
+    return lower.replaceAll(' ', '-');
+  }
+
+  Future<String> _resolveGeminiModel({
+    required String apiKey,
+    required String requestedModel,
+  }) async {
+    final normalized = _normalizeGeminiModel(requestedModel);
+    final available = await _listGeminiModels(apiKey);
+
+    if (available.isEmpty) {
+      return normalized;
+    }
+    if (available.contains(normalized)) {
+      return normalized;
+    }
+
+    final preferred = _pickPreferredGeminiModel(available);
+    return preferred ?? available.first;
+  }
+
+  Future<List<String>> _listGeminiModels(String apiKey) async {
+    final uri = Uri.parse(
+      'https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey',
+    );
+
+    try {
+      final response = await _client.get(uri);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return [];
+      }
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final models = decoded['models'] as List<dynamic>?;
+      if (models == null) {
+        return [];
+      }
+
+      final result = <String>[];
+      for (final model in models) {
+        if (model is! Map<String, dynamic>) {
+          continue;
+        }
+        final name = model['name'] as String?;
+        final methods = model['supportedGenerationMethods'] as List<dynamic>?;
+        if (name == null || methods == null) {
+          continue;
+        }
+        final supportsGenerate = methods
+            .map((method) => method.toString())
+            .contains('generateContent');
+        if (!supportsGenerate) {
+          continue;
+        }
+
+        result.add(name.replaceFirst('models/', ''));
+      }
+
+      return result;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  String? _pickPreferredGeminiModel(List<String> models) {
+    String? pick(bool Function(String model) predicate) {
+      for (final model in models) {
+        if (predicate(model)) {
+          return model;
+        }
+      }
+      return null;
+    }
+
+    return pick((model) => model.contains('1.5-flash')) ??
+        pick((model) => model.contains('flash')) ??
+        pick((model) => model.contains('1.5-pro')) ??
+        pick((model) => model.contains('pro'));
   }
 
   String _buildPrompt(String roughDiary) {
